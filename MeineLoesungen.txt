@@ -1,0 +1,5 @@
+
+Anmerkung: Ich bin brilliant aber alles Gesellschaftliche macht mir Probleme, viel Glück.
+
+Schritt 1: Das "," bei der Ausgabe von Endpoint IP, PORT entfernt, weil copy-paste.
+Schritt 2: Ein "Still alive" entwickeln (Kann ich einen Geister-Ring implementieren? welche Richtung? )
