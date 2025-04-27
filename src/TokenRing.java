@@ -15,7 +15,8 @@ public class TokenRing {
                 Token rc = Token.receive(socket);
                 System.out.printf("Token: seq=%d, #members=%d", rc.getSequence(), rc.length());
                 for (Token.Endpoint endpoint : rc.getRing()) {
-                    System.out.printf(" (%s, %d)", endpoint.ip(), endpoint.port());
+                    // Print the endpoint information without the ","
+                    System.out.printf(" (%s %d)", endpoint.ip(), endpoint.port());
                 }
                 System.out.println();
                 if (rc.length() == 1) {
@@ -50,7 +51,8 @@ public class TokenRing {
             String ip = socket.getLocalAddress().getHostAddress();
             socket.disconnect();
             int port = socket.getLocalPort();
-            System.out.printf("UDP endpoint is (%s, %d)\n", ip, port);
+            // Print the endpoint information without the ","
+            System.out.printf("UDP endpoint is (%s %d)\n", ip, port);
             if (args.length == 0) {
                 loop(socket,ip,port,true);
             }
