@@ -5,7 +5,7 @@ import java.util.LinkedList;
 
 public class TokenRing {
 
-    private static void loop(DatagramSocket socket, String ip, int port, boolean first){
+   private static void loop(DatagramSocket socket, String ip, int port, boolean first) {
         LinkedList<Token.Endpoint> candidates = new LinkedList<>();
         if (first) {
             candidates.add(new Token.Endpoint(ip, port));
@@ -15,32 +15,71 @@ public class TokenRing {
                 Token rc = Token.receive(socket);
                 System.out.printf("Token: seq=%d, #members=%d", rc.getSequence(), rc.length());
                 for (Token.Endpoint endpoint : rc.getRing()) {
-                    // Print the endpoint information without the ","
                     System.out.printf(" (%s %d)", endpoint.ip(), endpoint.port());
                 }
                 System.out.println();
+
                 if (rc.length() == 1) {
                     candidates.add(rc.poll());
                     if (!first) {
                         continue;
                     }
                 }
+
                 first = false;
                 for (Token.Endpoint candidate : candidates) {
                     rc.append(candidate);
                 }
                 candidates.clear();
+
                 Token.Endpoint next = rc.poll();
                 rc.append(next);
                 rc.incrementSequence();
                 Thread.sleep(1000);
-                rc.send(socket, next);
+
+                // Try sending to next node with timeout, handle node failure
+                boolean sent = false;
+                sent = rc.send(socket, next, 3000); // 3-second timeout
+
+                // If sending failed, try the next nodes in the ring
+                if (!sent) {
+                    System.out.printf("Node %s:%d failed. Removing from ring.\n", next.ip(), next.port());
+                    rc.removeNode(next.ip(), next.port());
+
+                    // Try next nodes in the ring if any are left
+                    if (rc.length() > 0) {
+                        int maxRetries = rc.length();
+                        int retries = 0;
+
+                        while (!sent && retries < maxRetries) {
+                            next = rc.poll();
+                            if (next == null) break;
+
+                            rc.append(next);
+                            sent = rc.send(socket, next, 3000);
+
+                            if (!sent) {
+                                System.out.printf("Node %s:%d also failed. Removing.\n", next.ip(), next.port());
+                                rc.removeNode(next.ip(), next.port());
+                            }
+                            retries++;
+                        }
+                    }
+
+                    // If still not sent and no nodes remaining
+                    if (!sent) {
+                        System.out.println("No responsive nodes in the ring. Restarting as ring leader.");
+                        rc = new Token().append(ip, port);
+                        first = true;
+                    }
+                }
             }
             catch (IOException e) {
                 System.out.println("Error receiving packet: " + e.getMessage());
             }
             catch (Exception e) {
                 System.out.println("Error: " + e.getMessage());
+                e.printStackTrace();
             }
         }
     }

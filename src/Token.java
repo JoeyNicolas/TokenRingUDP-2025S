@@ -1,10 +1,9 @@
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -13,7 +12,36 @@ public class Token {
 
     private static final int max_buffer_size = 4096;
 
-    public record Endpoint(String ip, int port) {}
+    // Add to Token.java
+    public Token removeNode(String ip, int port) {
+        ring.removeIf(endpoint -> endpoint.ip().equals(ip) && endpoint.port() == port);
+        return this;
+    }
+
+    public boolean send(DatagramSocket s, String ip_address, int port, int timeoutMs) throws IOException {
+        try {
+            int originalTimeout = s.getSoTimeout();
+            s.setSoTimeout(timeoutMs);
+            String rc_json = toJSON();
+            byte[] rc_json_bytes = rc_json.getBytes(StandardCharsets.UTF_8);
+            InetAddress address = InetAddress.getByName(ip_address);
+            DatagramPacket packet = new DatagramPacket(rc_json_bytes, rc_json_bytes.length, address, port);
+            System.out.printf("Sending %s to %s:%d\n", rc_json, ip_address, port);
+            s.send(packet);
+            s.setSoTimeout(originalTimeout);
+            return true;
+        } catch (SocketTimeoutException | PortUnreachableException e) {
+            System.out.printf("Failed to send to %s:%d - Node appears to be down\n", ip_address, port);
+            return false;
+        }
+    }
+
+    public boolean send(DatagramSocket s, Endpoint endpoint, int timeoutMs) throws IOException {
+        return send(s, endpoint.ip(), endpoint.port(), timeoutMs);
+    }
+
+    public record Endpoint(String ip, int port) {
+    }
 
     public Token append(String ip, int port) {
         ring.offer(new Endpoint(ip, port));
@@ -33,7 +61,7 @@ public class Token {
         return ring.poll();
     }
 
-    public int length () {
+    public int length() {
         return ring.size();
     }
 
@@ -51,7 +79,7 @@ public class Token {
         sequence++;
     }
 
-    public void send (DatagramSocket s, String ip_address, int port ) throws IOException {
+    public void send(DatagramSocket s, String ip_address, int port) throws IOException {
         String rc_json = toJSON();
         byte[] rc_json_bytes = rc_json.getBytes(StandardCharsets.UTF_8);
         InetAddress address = InetAddress.getByName(ip_address);
@@ -60,7 +88,7 @@ public class Token {
         s.send(packet);
     }
 
-    public void send (DatagramSocket s, Endpoint endpoint) throws IOException {
+    public void send(DatagramSocket s, Endpoint endpoint) throws IOException {
         send(s, endpoint.ip(), endpoint.port());
     }
 
@@ -68,7 +96,7 @@ public class Token {
         byte[] buf = new byte[max_buffer_size];
         DatagramPacket packet = new DatagramPacket(buf, buf.length);
         s.receive(packet);
-        String rc_json = new String(packet.getData(),0,packet.getLength(), StandardCharsets.UTF_8);
+        String rc_json = new String(packet.getData(), 0, packet.getLength(), StandardCharsets.UTF_8);
         System.out.printf("Received %s from %s:%d\n", rc_json, packet.getAddress().getHostAddress(), packet.getPort());
         return fromJSON(rc_json);
     }
